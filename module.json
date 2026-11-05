@@ -1,0 +1,18 @@
+{
+    "name": "Rentri",
+    "alias": "rentri",
+    "description": "Client delle API RENTRI: FIR digitale (xFIR), firma, accettazione, trasmissione dati dei pericolosi e del registro di carico/scarico",
+    "keywords": ["rentri", "rifiuti", "fir", "xfir", "modi", "agid"],
+    "priority": 0,
+    "active": 1,
+    "order": 60,
+    "providers": [
+        "Modules\\Rentri\\Providers\\RentriServiceProvider",
+        "Modules\\Rentri\\Providers\\Filament\\AdminPanelProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": ["Xot", "User", "Waste"],
+    "minimumCoreVersion": "10.0",
+    "phpVersion": "^8.3"
+}
