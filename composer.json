@@ -1,0 +1,56 @@
+{
+    "name": "laraxot/module_rentri",
+    "description": "RENTRI API client for the Laraxot ecosystem: digital FIR (xFIR), signature, acceptance, hazardous waste data and loading/unloading register transmission with AgID ModI authentication.",
+    "keywords": ["laraxot", "laravel", "filament", "rentri", "waste", "fir", "xfir", "modi", "agid"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marco Sottana",
+            "email": "marco.sottana@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\Rentri\\Providers\\RentriServiceProvider",
+                "Modules\\Rentri\\Providers\\Filament\\AdminPanelProvider"
+            ],
+            "aliases": []
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Rentri\\": "app/",
+            "Modules\\Rentri\\Database\\Factories\\": "database/factories/",
+            "Modules\\Rentri\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Rentri\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.3",
+        "ext-openssl": "*",
+        "firebase/php-jwt": "*"
+    },
+    "require-dev": {},
+    "scripts": {
+        "analyse": "vendor/bin/phpstan analyse",
+        "test": "./vendor/bin/pest --no-coverage",
+        "lint": [
+            "@php vendor/bin/pint",
+            "@php vendor/bin/phpstan analyse"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "wikimedia/composer-merge-plugin": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
