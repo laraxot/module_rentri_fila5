@@ -11,14 +11,7 @@ declare(strict_types=1);
  * I valori senza marcatura sono verificati sulla documentazione pubblica RENTRI.
  */
 return [
-<<<<<<< .merge_file_oVp89h
-<<<<<<< HEAD
-=======
     'navigation_sort' => 7,
->>>>>>> laraxot/dev
-=======
-    'navigation_sort' => 7,
->>>>>>> .merge_file_lVoDH5
     'name' => 'Rentri',
     'description' => 'Client delle API RENTRI (FIR digitale, firma, accettazione, registro cronologico)',
     'icon' => 'heroicon-o-arrows-right-left',
