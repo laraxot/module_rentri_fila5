@@ -84,6 +84,17 @@ return [
     ],
 
     /*
+     * Coda dei job RENTRI (IssueDigitalFirAction, SubmitFirAcceptanceAction): coda dedicata e
+     * timeout del job calcolato da `http` + margine (ConfiguresRentriJob). Worker consigliato:
+     *   php artisan queue:work --queue=rentri --tries=1 --timeout=180
+     * con `retry_after` della connessione di coda > --timeout (es. 240).
+     */
+    'queue' => [
+        'name' => env('RENTRI_QUEUE', 'rentri'),
+        'timeout_margin' => (int) env('RENTRI_JOB_TIMEOUT_MARGIN', 30),
+    ],
+
+    /*
      * JWT ModI (ID_AUTH_REST_02 in Authorization, INTEGRITY_REST_02 in Agid-JWT-Signature).
      * Header x5c con il certificato di interoperabilita' (verificato). Claim e audience NON verificati.
      */
@@ -143,9 +154,11 @@ return [
     ],
 
     /*
-     * Chiavi oscurate (case-insensitive, a ogni livello) nei payload salvati su rentri_transmissions.
+     * Parole che rendono segreta una chiave dei payload salvati su rentri_transmissions: la chiave si
+     * spezza in parole (camelCase, `_`, `-`) e basta che ne contenga una, a ogni livello. Es. `otpCode`,
+     * `pinFirma`, `credentialPassword`, `access_token`, `privateKey` (RedactRentriPayloadAction).
      */
-    'redact_keys' => ['pin', 'otp', 'password', 'certificate_password', 'sad', 'private_key', 'secret'],
+    'redact_keys' => ['pin', 'otp', 'password', 'passwd', 'pwd', 'secret', 'token', 'sad', 'private_key', 'api_key', 'authorization', 'credential_password', 'certificate_password'],
     'redacted_value' => '***',
 
     /*

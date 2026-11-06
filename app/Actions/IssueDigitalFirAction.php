@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Rentri\Actions;
 
+use Modules\Rentri\Actions\Concerns\ConfiguresRentriJob;
 use Modules\Rentri\Datas\RentriRequestData;
 use Modules\Rentri\Enums\RentriServiceEnum;
 use Modules\Rentri\Models\RentriCredential;
@@ -19,9 +20,14 @@ use Webmozart\Assert\Assert;
  * L'unita' locale che emette il formulario e' quella della credenziale. A esito positivo (sincrono o dopo il polling)
  * ApplyRentriTransmissionOutcomeAction salva il numero restituito su `firs.number` e porta il Fir a `issued`.
  * Accodabile: `app(IssueDigitalFirAction::class)->onQueue()->execute($fir, $credential)`.
+ *
+ * Idempotente (SendRentriRequestAction::exchangeOnce): se per il FIR c'e' gia' un'emissione in
+ * trasmissione, in attesa di esito o riuscita, restituisce quella senza inviare di nuovo. Come
+ * job: un solo tentativo e timeout coerente con le chiamate RENTRI (ConfiguresRentriJob).
  */
 class IssueDigitalFirAction
 {
+    use ConfiguresRentriJob;
     use QueueableAction;
 
     public function execute(Fir $fir, RentriCredential $credential): RentriTransmission
@@ -31,7 +37,7 @@ class IssueDigitalFirAction
 
         $payload = app(MapFirToRentriPayloadAction::class)->execute($fir, $site);
 
-        return app(SendRentriRequestAction::class)->exchange($credential, new RentriRequestData(
+        return app(SendRentriRequestAction::class)->exchangeOnce($credential, new RentriRequestData(
             service: RentriServiceEnum::FORMULARI,
             method: 'POST',
             path: '/',

@@ -12,6 +12,7 @@ use Illuminate\Support\Sleep;
 use Modules\Rentri\Actions\CancelDigitalFirAction;
 use Modules\Rentri\Actions\DownloadXfirAction;
 use Modules\Rentri\Actions\IssueDigitalFirAction;
+use Modules\Rentri\Actions\RetryRentriTransmissionAction;
 use Modules\Rentri\Actions\MapFirAcceptanceToRentriPayloadAction;
 use Modules\Rentri\Actions\MapFirToRentriPayloadAction;
 use Modules\Rentri\Actions\MapRegisterEntryToRentriPayloadAction;
@@ -21,6 +22,7 @@ use Modules\Rentri\Actions\TransmitHazardousFirDataAction;
 use Modules\Rentri\Actions\TransmitRegisterEntriesAction;
 use Modules\Rentri\Enums\TransmissionStatusEnum;
 use Modules\Rentri\Exceptions\RentriCredentialException;
+use Modules\Rentri\Models\RentriTransmission;
 use Modules\Rentri\Models\RentriCredential;
 use Modules\Rentri\Tests\Support\TestCertificate;
 use Modules\Rentri\Tests\TestCase;
@@ -209,6 +211,59 @@ describe('Flussi con anagrafiche Waste', function (): void {
         Assert::assertSame(TransmissionStatusEnum::SUCCEEDED, $transmission->status);
         $fir = $fixture['fir']->refresh();
         Assert::assertSame('XRAB 000999 ZZ', $fir->getAttribute('number'));
+    });
+
+    test('IssueDigitalFirAction idempotente: un secondo job non emette di nuovo il FIR', function (): void {
+        $fixture = rentriWasteFixture();
+        $credential = TestCertificate::generate()->credential(['operator_site_id' => $fixture['plant']->getKey()]);
+        Http::fake(['demoapi.rentri.gov.it/formulari/v1.0/' => Http::response(['transazione_id' => 'TX-ISSUE'], 202)]);
+
+        $first = app(IssueDigitalFirAction::class)->execute($fixture['fir'], $credential);
+        $second = app(IssueDigitalFirAction::class)->execute($fixture['fir'], $credential);
+
+        Assert::assertSame(TransmissionStatusEnum::SUBMITTED, $first->status);
+        Assert::assertSame($first->id, $second->id);
+        Http::assertSentCount(1);
+    });
+
+    test('IssueDigitalFirAction: dopo un\'emissione fallita si puo\' emettere di nuovo', function (): void {
+        $fixture = rentriWasteFixture();
+        $credential = TestCertificate::generate()->credential(['operator_site_id' => $fixture['plant']->getKey()]);
+        Http::fakeSequence('demoapi.rentri.gov.it/formulari/v1.0/')
+            ->push(['title' => 'Errore'], 400)
+            ->push(['transazione_id' => 'TX-2'], 202);
+
+        $failed = app(IssueDigitalFirAction::class)->execute($fixture['fir'], $credential);
+        $retried = app(IssueDigitalFirAction::class)->execute($fixture['fir'], $credential);
+
+        Assert::assertSame(TransmissionStatusEnum::FAILED, $failed->status);
+        Assert::assertSame(TransmissionStatusEnum::SUBMITTED, $retried->status);
+        Assert::assertNotSame($failed->id, $retried->id);
+    });
+
+    test('Riprova: un secondo "Riprova" sulla stessa trasmissione non invia di nuovo', function (): void {
+        $fixture = rentriWasteFixture();
+        $credential = TestCertificate::generate()->credential(['operator_site_id' => $fixture['plant']->getKey()]);
+        Http::fakeSequence('demoapi.rentri.gov.it/formulari/v1.0/')
+            ->push(['title' => 'Errore'], 400)
+            ->push(['transazione_id' => 'TX-R'], 202);
+        $failed = app(IssueDigitalFirAction::class)->execute($fixture['fir'], $credential);
+        $stale = RentriTransmission::query()->findOrFail($failed->id);
+
+        app(RetryRentriTransmissionAction::class)->execute($failed);
+
+        expect(static fn () => app(RetryRentriTransmissionAction::class)->execute($stale))->toThrow(\InvalidArgumentException::class);
+        Http::assertSentCount(2);
+    });
+
+    test('job RENTRI: coda dedicata, un tentativo, timeout oltre la durata massima della chiamata', function (): void {
+        $action = app(IssueDigitalFirAction::class);
+        $worstCall = config()->integer('rentri.http.retry_times') * (config()->integer('rentri.http.timeout') + config()->integer('rentri.http.connect_timeout'));
+
+        Assert::assertSame('rentri', $action->queue);
+        Assert::assertSame(1, $action->tries);
+        Assert::assertGreaterThan($worstCall, $action->timeout);
+        Assert::assertSame($action->timeout, app(SubmitFirAcceptanceAction::class)->timeout);
     });
 
     test('TransmitHazardousFirDataAction su FIR digitale usa /estrai', function (): void {

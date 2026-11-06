@@ -17,6 +17,9 @@ use Webmozart\Assert\Assert;
  *
  * Il payload salvato e' oscurato: se contiene valori oscurati (PIN, SAD...) non puo' essere reinviato e va
  * rifatta l'operazione di dominio (es. SignFirAction con un nuovo PIN).
+ *
+ * La trasmissione si rilegge e riapre (`pending`) sotto lock in una transazione breve: due
+ * "Riprova" contemporanei non producono due invii.
  */
 class RetryRentriTransmissionAction
 {
@@ -24,21 +27,26 @@ class RetryRentriTransmissionAction
 
     public function execute(RentriTransmission $transmission): RentriTransmission
     {
-        Assert::true($transmission->status->canTransitionTo(TransmissionStatusEnum::PENDING));
-
         if (app(RedactRentriPayloadAction::class)->containsRedactedValue($transmission->request_payload ?? [])) {
             throw new RentriException(RentriException::translate('rentri::exceptions.transmission.not_retryable'));
         }
 
         $credential = $transmission->credential;
         Assert::isInstanceOf($credential, RentriCredential::class);
+        $request = RentriRequestData::fromTransmission($transmission);
+        $sender = app(SendRentriRequestAction::class);
 
-        return app(SendRentriRequestAction::class)->exchange(
-            $credential,
-            RentriRequestData::fromTransmission($transmission),
-            null,
-            $transmission,
-        )->transmission;
+        // Riapertura sotto lock e commit prima della chiamata: un doppio click trova la riga gia'
+        // `pending` e si ferma sull'Assert, invece di inviare due volte.
+        $claimed = $transmission->getConnection()->transaction(static function () use ($transmission, $credential, $request, $sender): RentriTransmission {
+            $locked = RentriTransmission::query()->whereKey($transmission->getKey())->lockForUpdate()->firstOrFail();
+            Assert::true($locked->status->canTransitionTo(TransmissionStatusEnum::PENDING));
+
+            return $sender->open($credential, $request, null, $locked);
+        });
+        $transmission->setRawAttributes($claimed->getAttributes(), true);
+
+        return $sender->send($credential, $request, $transmission)->transmission;
     }
 
     public function canRetry(RentriTransmission $transmission): bool

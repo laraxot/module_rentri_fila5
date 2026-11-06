@@ -41,6 +41,18 @@ describe('RedactRentriPayloadAction', function (): void {
         Assert::assertTrue(app(RedactRentriPayloadAction::class)->containsRedactedValue($redacted));
         Assert::assertFalse(app(RedactRentriPayloadAction::class)->containsRedactedValue(['a' => 'b']));
     });
+
+    test('oscura per parola, non per nome esatto (B7): chiavi nuove come otpCode o credentialPassword', function (string $key): void {
+        $redacted = app(RedactRentriPayloadAction::class)->execute(['outer' => [$key => 'segreto']]);
+
+        Assert::assertSame('***', $redacted['outer'][$key], $key);
+    })->with(['otpCode', 'OTP', 'pinFirma', 'credentialPassword', 'certificate-password', 'X-Secret-Key', 'access_token', 'privateKey', 'sadValue', 'Authorization']);
+
+    test('non oscura chiavi che contengono le lettere ma non la parola', function (string $key): void {
+        $redacted = app(RedactRentriPayloadAction::class)->execute([$key => 'valore']);
+
+        Assert::assertSame('valore', $redacted[$key], $key);
+    })->with(['respingimento', 'tipoAccettazione', 'shipping', 'credentialID', 'spinta']);
 });
 
 describe('ResolveRentriCodeAction', function (): void {
