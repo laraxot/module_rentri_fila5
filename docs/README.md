@@ -123,6 +123,31 @@ Waste `RecordFirAcceptanceAction` registra accettazione, kg accettati e arrivo �
 
 PIN e SAD sono oscurati nel log: una firma fallita non si "riprova", si rifà con un nuovo PIN.
 
+Dal pannello: **RENTRI → Trasmissioni**, sulla riga dell'emissione (`POST /`) o dell'accettazione
+(`POST /{numero}/accettazione`) riuscita, azione **Firma FIR** (`SignFirTableAction`, visibile se
+`GetSignableFirAction` trova il FIR digitale con numero). Il PIN si digita in un campo password, va solo
+a `SignFirAction` e non si salva. Abilità `rentri_transmission.sign`.
+
+### Idempotenza, code e worker
+
+- `IssueDigitalFirAction` e `SubmitFirAcceptanceAction` inviano con `SendRentriRequestAction::exchangeOnce`:
+  sotto lock della riga del FIR cercano una trasmissione con lo stesso servizio, metodo e path in stato
+  `pending` (= **in trasmissione**: registrata e committata prima della chiamata HTTP), `submitted` o
+  `succeeded`. Se c'è, la restituiscono senza inviare di nuovo: un job ripetuto (timeout del worker,
+  retry della coda, doppio click) non emette due FIR. Solo dopo un `failed` si invia di nuovo.
+- `RetryRentriTransmissionAction` riapre la trasmissione `failed` sotto lock (transazione breve, commit
+  prima dell'invio): due "Riprova" contemporanei producono un solo invio.
+- Job (trait `ConfiguresRentriJob`): coda dedicata `rentri.queue.name` (default `rentri`, env `RENTRI_QUEUE`),
+  `tries = 1` (niente reinvii automatici), `timeout` = caso peggiore della chiamata con i retry HTTP
+  (`retry_times × (timeout + connect_timeout)` + pause) + `rentri.queue.timeout_margin` (default 30 s):
+  con i valori di default 151 s.
+- Worker: `php artisan queue:work --queue=rentri --tries=1 --timeout=180` (il `--timeout` del worker
+  deve essere ≥ quello del job, cioè maggiore della durata massima di una chiamata con retry) e
+  `retry_after` della connessione di coda **maggiore** di `--timeout` (es. 240), altrimenti la coda
+  riconsegna il job mentre è ancora in esecuzione. Etichette e altri job su un worker separato.
+- Una trasmissione rimasta `pending` (processo terminato durante la chiamata) blocca i reinvii
+  automatici: va verificata su RENTRI prima di intervenire (rischio residuo documentato).
+
 ### Dati dei pericolosi e registro
 
 - `TransmitHazardousFirDataAction`: FIR digitale → `POST /trasmissioni/operatore/{num_iscr_sito}/{numero_fir}/estrai`;
@@ -143,8 +168,10 @@ PIN e SAD sono oscurati nel log: una firma fallita non si "riprova", si rifà co
    né serializzata.
 5. Verificare con la pagina **Stato servizi RENTRI** che la credenziale autentichi correttamente.
 
-Segreti: le chiavi in `rentri.redact_keys` (pin, otp, password, sad, private_key…) sono sostituite con `***` in
-`request_payload` e `response_body`; l'xFIR (body non JSON) non viene salvato nel log, solo tipo e dimensione.
+Segreti: `rentri.redact_keys` elenca **parole** (pin, otp, password, secret, token, sad, private_key, …). Ogni
+chiave dei payload si spezza in parole (camelCase, `_`, `-`) e se ne contiene una il valore diventa `***` in
+`request_payload` e `response_body`, a ogni livello e senza distinzione di maiuscole: `otpCode`, `pinFirma`,
+`credentialPassword`, `X-Secret-Key` sono oscurate anche se nessuno le ha previste; `respingimento` no; l'xFIR (body non JSON) non viene salvato nel log, solo tipo e dimensione.
 
 ## Punti di estensione (config `rentri.*`)
 
@@ -165,14 +192,19 @@ annidato e impedisce letture runtime di `env()` fuori dalla directory `config` r
 | `codes.*` | mapping dei nostri enum verso le codifiche RENTRI |
 | `payload.*` | percorsi (dot notation) dei campi nel JSON RENTRI |
 | `sign.*` | campi della firma remota |
-| `redact_keys` | chiavi oscurate nei log |
+| `redact_keys` | parole che rendono segreta una chiave dei log |
+| `queue.name`, `queue.timeout_margin` | coda dei job RENTRI e margine del timeout |
 
 ## Filament
 
 - `RentriCredentialResource`: lista, crea, modifica (upload `.p12` su disco privato, password non sovrascritta se vuota).
 - `RentriTransmissionResource`: sola lettura (lista + dettaglio) con le azioni **Verifica esito**
   (`PollRentriTransmissionTableAction`) e **Riprova** (`RetryRentriTransmissionTableAction`, nascosta se il payload
-  contiene segreti oscurati). Permesso `rentri_transmission.retry`.
+  contiene segreti oscurati) e **Firma FIR** (`SignFirTableAction`). Permessi `rentri_transmission.retry`,
+  `rentri_transmission.sign`.
+- Policy con `DeniesUndeclaredFilamentAbilities` (eliminazione massiva delle credenziali, riordino, replica
+  negati se non dichiarati). Permessi creati da `RentriPermissionSeeder` (richiamato da `RentriDatabaseSeeder`):
+  `rentri_credential.*`, `rentri_code.*`, `rentri_transmission.{viewAny,view,retry,sign}`.
 - `RentriStatusPage`: stato dei servizi per la credenziale scelta.
 
 Etichette solo da `lang/{it,en}/*.php`.
