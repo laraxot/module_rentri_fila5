@@ -16,6 +16,7 @@ class RentriDatabaseSeeder extends Seeder
     {
         $this->call([
             RentriCodeSeeder::class,
+            RentriPermissionSeeder::class,
         ]);
     }
 }

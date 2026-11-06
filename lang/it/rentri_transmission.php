@@ -78,6 +78,11 @@ return [
             'tooltip' => 'Interroga RENTRI sullo stato della transazione asincrona',
             'icon' => 'heroicon-o-arrow-path',
         ],
+        'sign' => [
+            'label' => 'Firma FIR',
+            'tooltip' => 'Firma remota del FIR digitale con il PIN',
+            'icon' => 'heroicon-o-pencil-square',
+        ],
         'retry' => [
             'label' => 'Riprova',
             'tooltip' => 'Reinvia la richiesta registrata',

@@ -78,6 +78,11 @@ return [
             'tooltip' => 'Ask RENTRI for the status of the asynchronous transaction',
             'icon' => 'heroicon-o-arrow-path',
         ],
+        'sign' => [
+            'label' => 'Sign FIR',
+            'tooltip' => 'Remote signature of the digital FIR with the PIN',
+            'icon' => 'heroicon-o-pencil-square',
+        ],
         'retry' => [
             'label' => 'Retry',
             'tooltip' => 'Send the recorded request again',

@@ -14,6 +14,7 @@ use Modules\Rentri\Enums\RentriServiceEnum;
 use Modules\Rentri\Enums\TransmissionStatusEnum;
 use Modules\Rentri\Filament\Actions\PollRentriTransmissionTableAction;
 use Modules\Rentri\Filament\Actions\RetryRentriTransmissionTableAction;
+use Modules\Rentri\Filament\Actions\SignFirTableAction;
 use Modules\Rentri\Models\RentriTransmission;
 use Modules\Xot\Filament\Resources\Tables\XotBaseResourceTable;
 
@@ -64,6 +65,7 @@ class RentriTransmissionsTable extends XotBaseResourceTable
             'view' => ViewAction::make(),
             'poll' => PollRentriTransmissionTableAction::make(),
             'retry' => RetryRentriTransmissionTableAction::make(),
+            'sign' => SignFirTableAction::make(),
         ];
     }
 

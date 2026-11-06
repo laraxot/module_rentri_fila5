@@ -6,11 +6,13 @@ namespace Modules\Rentri\Tests\Feature;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
 use Modules\Rentri\Actions\CancelDigitalFirAction;
 use Modules\Rentri\Actions\DownloadXfirAction;
+use Modules\Rentri\Actions\GetSignableFirAction;
 use Modules\Rentri\Actions\IssueDigitalFirAction;
 use Modules\Rentri\Actions\RetryRentriTransmissionAction;
 use Modules\Rentri\Actions\MapFirAcceptanceToRentriPayloadAction;
@@ -20,6 +22,7 @@ use Modules\Rentri\Actions\ResolveCredentialAction;
 use Modules\Rentri\Actions\SubmitFirAcceptanceAction;
 use Modules\Rentri\Actions\TransmitHazardousFirDataAction;
 use Modules\Rentri\Actions\TransmitRegisterEntriesAction;
+use Modules\Rentri\Database\Seeders\RentriPermissionSeeder;
 use Modules\Rentri\Enums\TransmissionStatusEnum;
 use Modules\Rentri\Exceptions\RentriCredentialException;
 use Modules\Rentri\Models\RentriTransmission;
@@ -40,6 +43,8 @@ use Modules\Waste\Models\Operator;
 use Modules\Waste\Models\OperatorSite;
 use Modules\Waste\Models\Register;
 use Modules\Waste\Models\RegisterEntry;
+use Modules\User\Models\Permission;
+use Modules\User\Models\User;
 use PHPUnit\Framework\Assert;
 use function Safe\json_decode;
 
@@ -254,6 +259,42 @@ describe('Flussi con anagrafiche Waste', function (): void {
 
         expect(static fn () => app(RetryRentriTransmissionAction::class)->execute($stale))->toThrow(\InvalidArgumentException::class);
         Http::assertSentCount(2);
+    });
+
+    test('Firma FIR: disponibile solo sull\'emissione riuscita di un FIR digitale con numero', function (): void {
+        $fixture = rentriWasteFixture();
+        $credential = TestCertificate::generate()->credential(['operator_site_id' => $fixture['plant']->getKey()]);
+        Http::fake(['demoapi.rentri.gov.it/formulari/v1.0/' => Http::response(['numero_fir' => 'XRAB 000777 ZZ'], 201)]);
+
+        $issued = app(IssueDigitalFirAction::class)->execute($fixture['fir'], $credential);
+        $signable = app(GetSignableFirAction::class)->execute($issued);
+
+        Assert::assertInstanceOf(Fir::class, $signable);
+        Assert::assertSame('XRAB 000777 ZZ', $signable->number);
+
+        $issued->forceFill(['path' => '/XRAB 000777 ZZ/hash']);
+        Assert::assertNull(app(GetSignableFirAction::class)->execute($issued));
+    });
+
+    test('policy Rentri: permessi seminati, abilita\' non dichiarate negate, firma con abilita\' dedicata', function (): void {
+        (new RentriPermissionSeeder)->run();
+        (new RentriPermissionSeeder)->run();
+
+        $source = '';
+        foreach (glob(__DIR__.'/../../app/Models/Policies/*.php') ?: [] as $file) {
+            $source .= (string) file_get_contents($file);
+        }
+        preg_match_all("/hasPermissionTo\\('([a-z_]+\\.[A-Za-z]+)'\\)/", $source, $matches);
+        foreach (array_unique($matches[1]) as $name) {
+            Assert::assertSame(1, Permission::query()->where('name', $name)->where('guard_name', 'web')->count(), $name);
+        }
+
+        $user = User::withoutEvents(static fn (): User => User::factory()->create());
+        $user->givePermissionTo(['rentri_transmission.viewAny', 'rentri_credential.viewAny']);
+        Assert::assertFalse(Gate::forUser($user)->allows('sign', RentriTransmission::class));
+        Assert::assertFalse(Gate::forUser($user)->allows('deleteAny', RentriCredential::class));
+        $user->givePermissionTo('rentri_transmission.sign');
+        Assert::assertTrue(Gate::forUser($user->refresh())->allows('sign', RentriTransmission::class));
     });
 
     test('job RENTRI: coda dedicata, un tentativo, timeout oltre la durata massima della chiamata', function (): void {

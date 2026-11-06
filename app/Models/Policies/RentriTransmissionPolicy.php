@@ -6,6 +6,7 @@ namespace Modules\Rentri\Models\Policies;
 
 use Modules\User\Models\Policies\UserBasePolicy;
 use Modules\Xot\Contracts\UserContract;
+use Modules\Xot\Models\Policies\Concerns\DeniesUndeclaredFilamentAbilities;
 
 /**
  * Le trasmissioni sono un log scritto solo dalle Actions: dal pannello si leggono, si verifica l'esito e si riprova.
@@ -13,6 +14,8 @@ use Modules\Xot\Contracts\UserContract;
  */
 class RentriTransmissionPolicy extends UserBasePolicy
 {
+    use DeniesUndeclaredFilamentAbilities;
+
     public function before(UserContract $user, string $_ability): ?bool
     {
         if (\in_array($_ability, ['create', 'update', 'delete', 'forceDelete', 'restore', 'deleteAny'], true)) {
@@ -51,5 +54,11 @@ class RentriTransmissionPolicy extends UserBasePolicy
     public function retry(UserContract $user): bool
     {
         return $user->hasPermissionTo('rentri_transmission.retry');
+    }
+
+    /** "Firma FIR": firma remota con PIN (SignFirTableAction). */
+    public function sign(UserContract $user): bool
+    {
+        return $user->hasPermissionTo('rentri_transmission.sign');
     }
 }
