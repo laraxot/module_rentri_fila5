@@ -67,8 +67,9 @@ function rentriAcceptedFir(AcceptanceEnum $acceptance, float $acceptedKg): Fir
         'status' => FirStatusEnum::from('accepted'),
         'acceptance' => $acceptance,
         'accepted_quantity_kg' => $acceptedKg,
-        // 08:30 UTC = 09:30 a Roma (CET): indipendente dal cast datetime del modello Waste.
-        'arrived_at' => CarbonImmutable::parse('2026-11-04 08:30:00', 'UTC'),
+        // 09:30 a Roma (CET) espresso nel fuso dell'applicazione: il cast datetime salva l'ora locale
+        // senza fuso, quindi il valore deve essere nel fuso dell'app (UTC o Europe/Rome secondo il tenant).
+        'arrived_at' => CarbonImmutable::parse('2026-11-04 09:30:00', 'Europe/Rome')->setTimezone(config()->string('app.timezone')),
         'rejection_reason' => null,
     ]);
 }

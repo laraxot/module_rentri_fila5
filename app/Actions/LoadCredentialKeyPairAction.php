@@ -10,6 +10,7 @@ use Modules\Rentri\Datas\RentriKeyPairData;
 use Modules\Rentri\Exceptions\RentriCredentialException;
 use Modules\Rentri\Models\RentriCredential;
 use Spatie\QueueableAction\QueueableAction;
+use Webmozart\Assert\Assert;
 use function Safe\openssl_pkcs12_read;
 use function Safe\openssl_pkey_get_details;
 use function Safe\openssl_pkey_get_private;
@@ -83,6 +84,7 @@ class LoadCredentialKeyPairAction
     private function pemToDerBase64(string $pem): string
     {
         $base64 = preg_replace('/-----(BEGIN|END)[^-]+-----|\s+/', '', $pem);
+        Assert::string($base64);
 
         return $base64;
     }

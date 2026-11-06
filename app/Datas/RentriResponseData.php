@@ -8,6 +8,8 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Spatie\LaravelData\Attributes\Hidden;
 use Spatie\LaravelData\Data;
+use Safe\Exceptions\JsonException;
+
 use function Safe\json_decode;
 
 /**
@@ -32,7 +34,12 @@ class RentriResponseData extends Data
     public static function fromResponse(Response $response, int $attempts = 1): self
     {
         $raw = $response->body();
-        $decoded = $raw === '' ? null : json_decode($raw, true);
+        try {
+            $decoded = $raw === '' ? null : json_decode($raw, true);
+        } catch (JsonException) {
+            // Body non JSON (xFIR in XML, pagine d'errore HTML): resta solo in `raw`.
+            $decoded = null;
+        }
         $contentType = $response->header('Content-Type');
         $location = $response->header('Location');
 

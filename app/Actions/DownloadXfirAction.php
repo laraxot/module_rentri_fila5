@@ -13,6 +13,7 @@ use Modules\Rentri\Exceptions\RentriRequestException;
 use Modules\Rentri\Models\RentriCredential;
 use Modules\Waste\Models\Fir;
 use Spatie\QueueableAction\QueueableAction;
+use Webmozart\Assert\Assert;
 use function Safe\preg_replace;
 
 /**
@@ -39,9 +40,9 @@ class DownloadXfirAction
             throw RentriRequestException::fromTransmission($exchange->transmission, $response?->problem());
         }
 
-        $path = trim(config()->string('rentri.xfir.directory'), '/')
-            .'/'.preg_replace('/[^A-Za-z0-9_.-]/', '_', rawurldecode($this->firNumber($fir)))
-            .'.'.config()->string('rentri.xfir.extension');
+        $fileName = preg_replace('/[^A-Za-z0-9_.-]/', '_', rawurldecode($this->firNumber($fir)));
+        Assert::string($fileName);
+        $path = trim(config()->string('rentri.xfir.directory'), '/').'/'.$fileName.'.'.config()->string('rentri.xfir.extension');
 
         Storage::disk(config()->string('rentri.xfir.disk'))->put($path, $response->raw);
 
