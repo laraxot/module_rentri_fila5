@@ -10,6 +10,10 @@ use Modules\Rentri\Datas\RentriKeyPairData;
 use Modules\Rentri\Exceptions\RentriCredentialException;
 use Modules\Rentri\Models\RentriCredential;
 use Spatie\QueueableAction\QueueableAction;
+use function Safe\openssl_pkcs12_read;
+use function Safe\openssl_pkey_get_details;
+use function Safe\openssl_pkey_get_private;
+use function Safe\preg_replace;
 
 /**
  * Estrae chiave privata e certificato dal .p12 di interoperabilita' della credenziale (openssl_pkcs12_read).
@@ -34,8 +38,10 @@ class LoadCredentialKeyPairAction
         }
 
         $bundle = [];
-        if (! openssl_pkcs12_read($p12, $bundle, $credential->certificate_password) || ! \is_array($bundle)) {
-            throw RentriCredentialException::certificateUnreadable($credential, $this->opensslErrors());
+        try {
+            openssl_pkcs12_read($p12, $bundle, $credential->certificate_password);
+        } catch (\Throwable $exception) {
+            throw RentriCredentialException::certificateUnreadable($credential, $exception->getMessage());
         }
 
         $privateKey = $bundle['pkey'] ?? null;
@@ -78,27 +84,14 @@ class LoadCredentialKeyPairAction
     {
         $base64 = preg_replace('/-----(BEGIN|END)[^-]+-----|\s+/', '', $pem);
 
-        return \is_string($base64) ? $base64 : '';
+        return $base64;
     }
 
     private function algorithm(string $privateKeyPem): string
     {
         $key = openssl_pkey_get_private($privateKeyPem);
-        if ($key === false) {
-            return 'RS256';
-        }
         $details = openssl_pkey_get_details($key);
 
-        return \is_array($details) && ($details['type'] ?? null) === OPENSSL_KEYTYPE_EC ? 'ES256' : 'RS256';
-    }
-
-    private function opensslErrors(): string
-    {
-        $errors = [];
-        while (($error = openssl_error_string()) !== false) {
-            $errors[] = $error;
-        }
-
-        return $errors === [] ? 'openssl' : implode('; ', $errors);
+        return ($details['type'] ?? null) === OPENSSL_KEYTYPE_EC ? 'ES256' : 'RS256';
     }
 }

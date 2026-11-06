@@ -82,7 +82,7 @@ describe('RentriProblemData', function (): void {
         $problem = RentriProblemData::fromBody(['type' => 'about:blank', 'title' => 'Bad Request', 'status' => 400, 'detail' => 'numero_fir non valido']);
 
         Assert::assertInstanceOf(RentriProblemData::class, $problem);
-        Assert::assertSame('Bad Request — numero_fir non valido', $problem?->summary());
+        Assert::assertSame('Bad Request — numero_fir non valido', $problem->summary());
         Assert::assertNull(RentriProblemData::fromBody([]));
     });
 });

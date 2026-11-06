@@ -15,6 +15,7 @@ use Modules\Rentri\Models\RentriCredential;
 use Modules\Rentri\Models\RentriTransmission;
 use Spatie\QueueableAction\QueueableAction;
 use Webmozart\Assert\Assert;
+use function Safe\json_encode;
 
 /**
  * Verifica l'esito di una trasmissione asincrona (`submitted` con `transazione_id`).
@@ -112,7 +113,7 @@ class PollRentriTransactionAction
             if ($value !== null && $value !== [] && $value !== '') {
                 $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-                return \is_string($encoded) ? $encoded : $key;
+                return $encoded;
             }
         }
 

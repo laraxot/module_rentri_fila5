@@ -13,6 +13,7 @@ use Modules\Rentri\Exceptions\RentriRequestException;
 use Modules\Rentri\Models\RentriCredential;
 use Modules\Waste\Models\Fir;
 use Spatie\QueueableAction\QueueableAction;
+use function Safe\preg_replace;
 
 /**
  * Scarica l'xFIR (formulario digitale firmato) con `GET /{numero_fir}/xfir` (verificato) e lo salva sul disco

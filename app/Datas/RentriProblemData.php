@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Rentri\Datas;
 
 use Spatie\LaravelData\Data;
+use function Safe\json_encode;
 
 /**
  * Errore RENTRI in formato application/problem+json (RFC 7807): type, title, status, detail, instance
@@ -57,7 +58,7 @@ class RentriProblemData extends Data
 
         if ($this->errors !== []) {
             $encoded = json_encode($this->errors, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $summary .= ($summary === '' ? '' : ' ').(\is_string($encoded) ? $encoded : '');
+            $summary .= ($summary === '' ? '' : ' ').$encoded;
         }
 
         return $summary;

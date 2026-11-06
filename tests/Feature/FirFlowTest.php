@@ -39,6 +39,7 @@ use Modules\Waste\Models\OperatorSite;
 use Modules\Waste\Models\Register;
 use Modules\Waste\Models\RegisterEntry;
 use PHPUnit\Framework\Assert;
+use function Safe\json_decode;
 
 uses(TestCase::class);
 

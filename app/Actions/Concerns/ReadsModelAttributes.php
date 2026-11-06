@@ -7,6 +7,7 @@ namespace Modules\Rentri\Actions\Concerns;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Modules\Rentri\Exceptions\RentriMappingException;
+use function Safe\json_decode;
 
 /**
  * Lettura tipizzata degli attributi dei modelli Waste (che il modulo legge ma non possiede):

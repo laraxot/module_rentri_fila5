@@ -10,6 +10,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Support\Enums\FontFamily;
 use Modules\Rentri\Models\RentriTransmission;
 use Modules\Xot\Filament\Resources\Schemas\XotBaseResourceInfolist;
+use function Safe\json_encode;
 
 /**
  * Dettaglio di una trasmissione. Richiesta e risposta sono gia' oscurate al salvataggio.
@@ -64,6 +65,6 @@ class RentriTransmissionInfolist extends XotBaseResourceInfolist
         }
         $encoded = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        return \is_string($encoded) ? $encoded : '';
+        return $encoded;
     }
 }

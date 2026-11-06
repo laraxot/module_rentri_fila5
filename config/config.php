@@ -24,7 +24,8 @@ return [
      * Ambiente usato quando un sito ha piu' credenziali attive (ResolveCredentialAction).
      * Valori: RentriEnvironmentEnum (demo, production).
      */
-    'default_environment' => env('RENTRI_ENVIRONMENT', 'demo'),
+    // Module config is merged from its own directory; getenv() is evaluated while the config cache is built.
+    'default_environment' => getenv('RENTRI_ENVIRONMENT') ?: 'demo',
 
     /*
      * Ambienti (verificati).
@@ -74,11 +75,11 @@ return [
     ],
 
     'http' => [
-        'timeout' => (int) env('RENTRI_HTTP_TIMEOUT', 30),
-        'connect_timeout' => (int) env('RENTRI_HTTP_CONNECT_TIMEOUT', 10),
+        'timeout' => (int) (getenv('RENTRI_HTTP_TIMEOUT') ?: 30),
+        'connect_timeout' => (int) (getenv('RENTRI_HTTP_CONNECT_TIMEOUT') ?: 10),
         // Tentativi totali sugli errori transitori (connessione, 429, 5xx). A ogni tentativo i JWT sono rigenerati (jti nuovo).
-        'retry_times' => (int) env('RENTRI_HTTP_RETRY_TIMES', 3),
-        'retry_sleep_ms' => (int) env('RENTRI_HTTP_RETRY_SLEEP_MS', 500),
+        'retry_times' => (int) (getenv('RENTRI_HTTP_RETRY_TIMES') ?: 3),
+        'retry_sleep_ms' => (int) (getenv('RENTRI_HTTP_RETRY_SLEEP_MS') ?: 500),
         'retry_on_status' => [429, 500, 502, 503, 504],
     ],
 
@@ -88,7 +89,7 @@ return [
      */
     'jwt' => [
         // DA VERIFICARE sullo Swagger demo (https://demoapi.rentri.gov.it/docs) — durata del token in secondi
-        'ttl' => (int) env('RENTRI_JWT_TTL', 300),
+        'ttl' => (int) (getenv('RENTRI_JWT_TTL') ?: 300),
         // DA VERIFICARE sullo Swagger demo (https://demoapi.rentri.gov.it/docs) — valori presi da pyrentri (fonte non ufficiale)
         'audience' => [
             'demo' => 'rentrigov.demo.api',
@@ -101,13 +102,13 @@ return [
 
     'certificates' => [
         // Disco PRIVATO su cui stanno i .p12 caricati dal pannello (mai un disco pubblico).
-        'disk' => env('RENTRI_CERTIFICATES_DISK', 'local'),
+        'disk' => getenv('RENTRI_CERTIFICATES_DISK') ?: 'local',
         'directory' => 'rentri/certificates',
     ],
 
     'xfir' => [
         // Dove DownloadXfirAction salva gli xFIR scaricati (disco privato).
-        'disk' => env('RENTRI_XFIR_DISK', 'local'),
+        'disk' => getenv('RENTRI_XFIR_DISK') ?: 'local',
         'directory' => 'rentri/xfir',
         // DA VERIFICARE sullo Swagger demo (https://demoapi.rentri.gov.it/docs) — Accept ed estensione per GET /{numero_fir}/xfir
         'accept' => 'application/xml, application/json, application/problem+json',
@@ -116,7 +117,7 @@ return [
 
     'polling' => [
         // Registra nello scheduler il poll delle transazioni in attesa (ogni minuto).
-        'enabled' => (bool) env('RENTRI_POLLING_ENABLED', true),
+        'enabled' => filter_var(getenv('RENTRI_POLLING_ENABLED') ?: '1', FILTER_VALIDATE_BOOLEAN),
         // Oltre questi tentativi la trasmissione passa a failed.
         'max_attempts' => 120,
         // Trasmissioni esaminate per esecuzione.

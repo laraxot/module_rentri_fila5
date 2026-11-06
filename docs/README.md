@@ -148,6 +148,10 @@ Segreti: le chiavi in `rentri.redact_keys` (pin, otp, password, sad, private_key
 
 ## Punti di estensione (config `rentri.*`)
 
+Le impostazioni `RENTRI_*` vengono lette nel file di configurazione del modulo tramite `getenv()` e diventano parte
+della configurazione compilata quando Laravel esegue `config:cache`. Questo mantiene il modulo autonomo nel repository
+annidato e impedisce letture runtime di `env()` fuori dalla directory `config` riconosciuta da Larastan.
+
 | Chiave | Uso |
 |---|---|
 | `environments.*.base_url` | URL degli ambienti |

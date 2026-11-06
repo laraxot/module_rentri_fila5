@@ -7,6 +7,13 @@ namespace Modules\Rentri\Tests\Support;
 use Illuminate\Support\Facades\Storage;
 use Modules\Rentri\Models\RentriCredential;
 use Webmozart\Assert\Assert;
+use function Safe\openssl_csr_new;
+use function Safe\openssl_csr_sign;
+use function Safe\openssl_pkey_get_details;
+use function Safe\openssl_pkey_new;
+use function Safe\openssl_pkcs12_export;
+use function Safe\openssl_x509_export;
+use function Safe\preg_replace;
 
 /**
  * Genera al volo con openssl un certificato autofirmato RSA 2048 e il relativo .p12 protetto da password,
@@ -25,22 +32,16 @@ final class TestCertificate
     public static function generate(): self
     {
         $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
-        if (! $key instanceof \OpenSSLAsymmetricKey) {
-            throw new \RuntimeException('openssl_pkey_new');
-        }
         // openssl_csr_new riceve la chiave per riferimento: si passa una copia per non perdere $key.
         $csrKey = $key;
         $csr = openssl_csr_new(['commonName' => 'Roosko RENTRI Test', 'countryName' => 'IT'], $csrKey, ['digest_alg' => 'sha256']);
-        if (! $csr instanceof \OpenSSLCertificateSigningRequest) {
-            throw new \RuntimeException('openssl_csr_new');
-        }
+        Assert::isInstanceOf($csr, \OpenSSLCertificateSigningRequest::class);
         $x509 = openssl_csr_sign($csr, null, $key, 30, ['digest_alg' => 'sha256']);
-        if (! $x509 instanceof \OpenSSLCertificate) {
-            throw new \RuntimeException('openssl_csr_sign');
-        }
 
-        Assert::true(openssl_x509_export($x509, $certificatePem));
-        Assert::true(openssl_pkcs12_export($x509, $p12, $key, self::PASSWORD));
+        $certificatePem = '';
+        openssl_x509_export($x509, $certificatePem);
+        $p12 = '';
+        openssl_pkcs12_export($x509, $p12, $key, self::PASSWORD);
         $details = openssl_pkey_get_details($key);
         Assert::isArray($details);
         Assert::string($details['key']);

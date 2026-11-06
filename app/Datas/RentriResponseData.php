@@ -8,6 +8,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Spatie\LaravelData\Attributes\Hidden;
 use Spatie\LaravelData\Data;
+use function Safe\json_decode;
 
 /**
  * Risposta HTTP di RENTRI normalizzata: codice, body JSON decodificato (vuoto se non JSON), body grezzo

@@ -17,6 +17,8 @@ use Modules\Rentri\Models\RentriTransmission;
 use Modules\Rentri\Tests\Support\TestCertificate;
 use Modules\Rentri\Tests\TestCase;
 use PHPUnit\Framework\Assert;
+use function Safe\json_decode;
+use function Safe\json_encode;
 
 uses(TestCase::class);
 
@@ -34,7 +36,7 @@ function rentriRecordedRequests(): array
 {
     $requests = [];
     foreach (Http::recorded() as $pair) {
-        $request = \is_array($pair) ? ($pair[0] ?? null) : null;
+        $request = \is_array($pair) ? $pair[0] : null;
         if ($request instanceof Request) {
             $requests[] = $request;
         }
