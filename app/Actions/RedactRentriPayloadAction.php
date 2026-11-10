@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\Rentri\Actions;
 
+use Illuminate\Support\Str;
 use Spatie\QueueableAction\QueueableAction;
+
 
 /**
  * Oscura i segreti (PIN, OTP, SAD, password, chiavi...) in un payload prima di salvarlo su `rentri_transmissions`.
@@ -69,10 +71,12 @@ class RedactRentriPayloadAction
     /** `otpCode` / `OTP-code` / `otp_code` → `otp_code`. */
     private static function words(string $value): string
     {
-        $value = preg_replace('/([a-z0-9])([A-Z])/', '$1_$2', $value) ?? $value;
-        $value = preg_replace('/[^a-z0-9]+/', '_', mb_strtolower($value)) ?? $value;
-
-        return trim($value, '_');
+        return Str::of($value)
+            ->replaceMatches('/([a-z0-9])([A-Z])/', '$1_$2')
+            ->lower()
+            ->replaceMatches('/[^a-z0-9]+/', '_')
+            ->trim('_')
+            ->toString();
     }
 
     /**
