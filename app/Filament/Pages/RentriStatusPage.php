@@ -7,6 +7,7 @@ namespace Modules\Rentri\Filament\Pages;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Illuminate\Contracts\Auth\Access\Authorizable;
+use Illuminate\Contracts\Support\Htmlable;
 use Modules\Rentri\Actions\CheckRentriServiceStatusAction;
 use Modules\Rentri\Datas\RentriServiceStatusData;
 use Modules\Rentri\Enums\RentriServiceEnum;
@@ -31,6 +32,21 @@ class RentriStatusPage extends XotBasePage
      * @var array<string, array{health: string, http_status: int|null, message: string|null, checked_at: string}>
      */
     public array $results = [];
+
+    public static function getNavigationLabel(): string
+    {
+        return static::trans('navigation.label');
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return static::trans('navigation.group');
+    }
+
+    public function getTitle(): string|Htmlable
+    {
+        return static::trans('title');
+    }
 
     public static function canAccess(): bool
     {

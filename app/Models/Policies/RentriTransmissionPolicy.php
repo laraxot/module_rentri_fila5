@@ -7,6 +7,7 @@ namespace Modules\Rentri\Models\Policies;
 use Modules\User\Models\Policies\UserBasePolicy;
 use Modules\Xot\Contracts\UserContract;
 use Modules\Xot\Models\Policies\Concerns\DeniesUndeclaredFilamentAbilities;
+use Modules\Xot\Models\Policies\Concerns\RequiresOperationalPermissions;
 
 /**
  * Le trasmissioni sono un log scritto solo dalle Actions: dal pannello si leggono, si verifica l'esito e si riprova.
@@ -15,6 +16,7 @@ use Modules\Xot\Models\Policies\Concerns\DeniesUndeclaredFilamentAbilities;
 class RentriTransmissionPolicy extends UserBasePolicy
 {
     use DeniesUndeclaredFilamentAbilities;
+    use RequiresOperationalPermissions;
 
     public function before(UserContract $user, string $_ability): ?bool
     {
