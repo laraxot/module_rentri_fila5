@@ -383,4 +383,48 @@ describe('Flussi con anagrafiche Waste', function (): void {
         Assert::assertNotNull($fresh->getAttribute('transmitted_at'));
         Assert::assertSame('TX-REG', $fresh->getAttribute('rentri_transmission_ref'));
     });
+    test('TransmitRegisterEntriesAction: le scritture in attesa di esito non si reinviano', function (): void {
+        $fixture = rentriWasteFixture();
+        $register = (new Register)->forceFill([
+            'operator_site_id' => $fixture['plant']->getKey(), 'name' => 'Registro impianto',
+            'rentri_identifier' => 'REG-PD-2', 'is_active' => true,
+        ]);
+        $register->save();
+        $make = static function (int $number) use ($register, $fixture): RegisterEntry {
+            $entry = (new RegisterEntry)->forceFill([
+                'register_id' => $register->getKey(), 'year' => 2026, 'number' => $number,
+                'type' => RegisterEntryTypeEnum::from('load'), 'cause' => RegisterCauseEnum::from('from_third_parties'),
+                'recorded_at' => CarbonImmutable::parse('2026-11-04 10:00:00'), 'operation_at' => CarbonImmutable::parse('2026-11-04 09:30:00'),
+                'ewc_code_id' => $fixture['ewc']->getKey(), 'physical_state' => PhysicalStateEnum::from('solid_non_powdery'),
+                'hazard_properties' => [HazardPropertyEnum::from('HP14')], 'quantity_kg' => 1000.0,
+                'operation' => WasteOperationEnum::from('R13'), 'fir_id' => $fixture['fir']->getKey(),
+                'counterpart_operator_id' => $fixture['producer']->getKey(), 'load_entry_ids' => [],
+                'transmitted_at' => null,
+            ]);
+            $entry->save();
+
+            return $entry;
+        };
+        $first = $make(1);
+        $credential = TestCertificate::generate()->credential(['operator_site_id' => $fixture['plant']->getKey()]);
+        Http::fake(['*/REG-PD-2/movimenti' => Http::response(['transazione_id' => 'TX-REG-2'], 202)]);
+        $action = app(TransmitRegisterEntriesAction::class);
+
+        $submitted = $action->execute($register, $credential);
+        Assert::assertSame(TransmissionStatusEnum::SUBMITTED, $submitted->status);
+
+        // Esito non ancora arrivato: lo stesso invio (job ripetuto, doppio click) non riparte.
+        expect(static fn () => $action->execute($register, $credential))
+            ->toThrow(\Modules\Rentri\Exceptions\RentriMappingException::class, __('rentri::exceptions.register.already_in_transmission'));
+
+        // Una scrittura nuova parte da sola, senza quella gia' in attesa.
+        $second = $make(2);
+        $next = $action->execute($register, $credential);
+        Assert::assertSame([$second->getKey()], data_get($next->request_payload, 'meta.entry_ids'));
+
+        // Se una trasmissione fallisce, le sue scritture tornano inviabili.
+        $submitted->forceFill(['status' => TransmissionStatusEnum::FAILED])->save();
+        $retry = $action->execute($register, $credential);
+        Assert::assertSame([$first->getKey()], data_get($retry->request_payload, 'meta.entry_ids'));
+    });
 });

@@ -25,6 +25,7 @@ return [
     ],
     'register' => [
         'nothing_to_transmit' => 'Nessuna scrittura del registro da trasmettere.',
+        'already_in_transmission' => 'Le scritture del registro sono gia\' in trasmissione a RENTRI: attendi l\'esito prima di inviarle di nuovo.',
     ],
     'transmission' => [
         'immutable' => 'Le trasmissioni RENTRI sono un registro: non si possono cancellare.',

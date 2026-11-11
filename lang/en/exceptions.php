@@ -25,6 +25,7 @@ return [
     ],
     'register' => [
         'nothing_to_transmit' => 'No register entries to transmit.',
+        'already_in_transmission' => 'The register entries are already being transmitted to RENTRI: wait for the outcome before sending them again.',
     ],
     'transmission' => [
         'immutable' => 'RENTRI transmissions are a log: they cannot be deleted.',

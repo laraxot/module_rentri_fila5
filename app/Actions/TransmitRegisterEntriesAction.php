@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\Rentri\Actions;
 
-use Modules\Rentri\Exceptions\RentriException;
 use Illuminate\Support\Collection;
 use Modules\Rentri\Datas\RentriRegisterPayloadData;
 use Modules\Rentri\Datas\RentriRequestData;
 use Modules\Rentri\Enums\RentriServiceEnum;
+use Modules\Rentri\Enums\TransmissionStatusEnum;
+use Modules\Rentri\Exceptions\RentriException;
 use Modules\Rentri\Exceptions\RentriMappingException;
 use Modules\Rentri\Models\RentriCredential;
 use Modules\Rentri\Models\RentriTransmission;
@@ -24,6 +25,12 @@ use Spatie\QueueableAction\QueueableAction;
  * DA VERIFICARE: servizio `dati_registri`, path `rentri.paths.register_movements`, schema del movimento.
  * A esito positivo (subito o dopo il polling) ApplyRentriTransmissionOutcomeAction valorizza `transmitted_at`
  * e `rentri_transmission_ref`; gli id inviati stanno in `request_payload.meta.entry_ids`.
+ *
+ * Niente doppio invio: sotto lock della riga del registro si escludono le scritture gia' contenute in
+ * una trasmissione del registro ancora `pending` (in invio) o `submitted` (in attesa di esito). La
+ * trasmissione nuova si registra `pending` e si committa prima della chiamata HTTP, come in
+ * SendRentriRequestAction::exchangeOnce(): un job ripetuto o due invii in parallelo non mandano due
+ * volte la stessa scrittura. Le scritture di una trasmissione `failed` tornano inviabili.
  */
 class TransmitRegisterEntriesAction
 {
@@ -40,34 +47,73 @@ class TransmitRegisterEntriesAction
             throw RentriMappingException::missingValue('rentri_identifier', 'Register#'.(\is_scalar($key) ? (string) $key : '?'));
         }
 
-        $entries = ($entries ?? RegisterEntry::query()
-            ->where('register_id', $register->getKey())
-            ->whereNull('transmitted_at')
-            ->get())
-            ->filter(static fn (RegisterEntry $entry): bool => $entry->getAttribute('transmitted_at') === null
-                && $entry->getAttribute('register_id') == $register->getKey())
-            ->sortBy([['year', 'asc'], ['number', 'asc']])
-            ->values();
+        // Registro e trasmissioni possono stare su connessioni diverse: transazione su entrambe, come exchangeOnce().
+        $rentri = (new RentriTransmission)->getConnection();
+        /** @var array{0: RentriTransmission, 1: RentriRequestData} $claim */
+        $claim = $register->getConnection()->transaction(fn (): array => $rentri->transaction(function () use ($register, $credential, $entries, $identifier): array {
+            // Serializza gli invii dello stesso registro.
+            $register->newQuery()->whereKey($register->getKey())->lockForUpdate()->first();
+            $inFlight = $this->inFlightEntryIds($register);
 
-        if ($entries->isEmpty()) {
-            throw new RentriMappingException(RentriException::translate('rentri::exceptions.register.nothing_to_transmit'));
-        }
+            $selected = ($entries ?? RegisterEntry::query()
+                ->where('register_id', $register->getKey())
+                ->whereNull('transmitted_at')
+                ->get())
+                ->filter(static fn (RegisterEntry $entry): bool => $entry->getAttribute('transmitted_at') === null
+                    && $entry->getAttribute('register_id') == $register->getKey()
+                    && ! \in_array($entry->getKey(), $inFlight, true))
+                ->sortBy([['year', 'asc'], ['number', 'asc']])
+                ->values();
 
-        $mapper = app(MapRegisterEntryToRentriPayloadAction::class);
-        $payload = new RentriRegisterPayloadData(
-            registerIdentifier: $identifier,
-            entries: array_values($entries->map(static fn (RegisterEntry $entry) => $mapper->execute($entry))->all()),
-        );
+            if ($selected->isEmpty()) {
+                throw new RentriMappingException(RentriException::translate($inFlight === []
+                    ? 'rentri::exceptions.register.nothing_to_transmit'
+                    : 'rentri::exceptions.register.already_in_transmission'));
+            }
 
-        return app(SendRentriRequestAction::class)->exchange($credential, new RentriRequestData(
-            service: RentriServiceEnum::DATI_REGISTRI,
-            method: 'POST',
-            path: str_replace('{identificativo_registro}', rawurlencode($identifier), config()->string('rentri.paths.register_movements')),
-            payload: $payload->toRentri(),
-            meta: [
-                'outcome' => ApplyRentriTransmissionOutcomeAction::REGISTER_ENTRIES,
-                'entry_ids' => $payload->entryIds(),
-            ],
-        ), $register)->transmission;
+            $mapper = app(MapRegisterEntryToRentriPayloadAction::class);
+            $payload = new RentriRegisterPayloadData(
+                registerIdentifier: $identifier,
+                entries: array_values($selected->map(static fn (RegisterEntry $entry) => $mapper->execute($entry))->all()),
+            );
+
+            $request = new RentriRequestData(
+                service: RentriServiceEnum::DATI_REGISTRI,
+                method: 'POST',
+                path: str_replace('{identificativo_registro}', rawurlencode($identifier), config()->string('rentri.paths.register_movements')),
+                payload: $payload->toRentri(),
+                meta: [
+                    'outcome' => ApplyRentriTransmissionOutcomeAction::REGISTER_ENTRIES,
+                    'entry_ids' => $payload->entryIds(),
+                ],
+            );
+
+            return [app(SendRentriRequestAction::class)->open($credential, $request, $register, null), $request];
+        }));
+        [$transmission, $request] = $claim;
+
+        return app(SendRentriRequestAction::class)->send($credential, $request, $transmission)->transmission;
+    }
+
+    /**
+     * Id delle scritture gia' in una trasmissione del registro non ancora conclusa.
+     *
+     * @return list<int>
+     */
+    private function inFlightEntryIds(Register $register): array
+    {
+        return array_values(RentriTransmission::query()
+            ->where('subject_type', $register->getMorphClass())
+            ->where('subject_id', $register->getKey())
+            ->where('service', RentriServiceEnum::DATI_REGISTRI->value)
+            ->whereIn('status', [TransmissionStatusEnum::PENDING->value, TransmissionStatusEnum::SUBMITTED->value])
+            ->get()
+            ->flatMap(static function (RentriTransmission $transmission): array {
+                $ids = data_get($transmission->request_payload, 'meta.entry_ids');
+
+                return \is_array($ids) ? array_values(array_filter($ids, \is_int(...))) : [];
+            })
+            ->unique()
+            ->all());
     }
 }
